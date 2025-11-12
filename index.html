@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Movie Review Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root{
+            --bg: #0f1720;
+            --panel: #141820;
+            --card: #1c2228;
+            --muted: #9aa4b2;
+            --text: #e6eef8;
+            --accent: #3b82f6;
+            --rating: #f9b034;
+            --overlay: rgba(6,8,10,0.65);
+        }
+
+        /* Reduced base font size */
+        html,body{font-size:13px;}
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            background: linear-gradient(180deg, var(--bg) 0%, #0b1116 100%);
+            color: var(--text);
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+        }
+        header {
+            background: linear-gradient(90deg,#090b0f 0%, #111418 100%);
+            color: var(--text);
+            padding: 18px 0 10px 0;
+            text-align: center;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.6);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        header h1{
+            margin:0;
+            font-size:18px; /* smaller heading */
+            font-weight:600;
+            letter-spacing:0.4px;
+        }
+        header input {
+            padding: 8px 10px;
+            width: 240px;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.02);
+            color: var(--text);
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size:13px;
+            outline: none;
+        }
+        header input::placeholder { color: rgba(255,255,255,0.35); }
+
+        main { padding: 18px 12px 36px 12px; }
+
+        #movieList {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            justify-content: center;
+            padding: 8px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .movie-card {
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+            border-radius: 10px;
+            box-shadow: 0 6px 22px rgba(2,6,12,0.6);
+            width: 220px;
+            margin-bottom: 12px;
+            transition: transform 0.15s ease, box-shadow 0.15s;
+            cursor: pointer;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+        .movie-card:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 12px 36px rgba(2,6,12,0.75);
+        }
+        .movie-banner {
+            width: 100%;
+            height: 130px;
+            object-fit: cover;
+            display:block;
+            filter: contrast(0.95) saturate(0.95);
+            background: #0b0e12;
+        }
+        .movie-body {
+            padding: 10px 10px 12px 10px;
+        }
+        .movie-title {
+            font-size:15px;
+            font-weight:600;
+            color: var(--text);
+            margin-bottom:6px;
+        }
+        .movie-rating {
+            font-size:12px;
+            color: var(--muted);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9000;
+            left: 0; top: 0; right: 0; bottom: 0;
+            background: var(--overlay);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: linear-gradient(180deg,#0f1418,#0b0e12);
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 18px 48px rgba(0,0,0,0.7);
+            width: 360px;
+            position: relative;
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        #closeBtn {
+            position: absolute;
+            right: 12px;
+            top: 10px;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--muted);
+        }
+        #modalMovieBanner {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            height: 160px;
+            object-fit: cover;
+            background: #081018;
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+        #modalMovieTitle {
+            margin:4px 0 8px 0;
+            font-size:16px;
+            color:var(--text);
+        }
+        #reviewForm {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size:13px;
+        }
+        #reviewForm label { color: var(--muted); font-size:12px; }
+        #reviewForm textarea {
+            resize: vertical;
+            min-height: 46px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 8px;
+            background: rgba(255,255,255,0.02);
+            color: var(--text);
+        }
+        #reviewForm select, #reviewForm button {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.04);
+            font-size: 13px;
+            background: rgba(255,255,255,0.02);
+            color: var(--text);
+        }
+        #reviewForm button {
+            background: linear-gradient(90deg,var(--accent),#1e40af);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-weight:600;
+        }
+        #reviews {
+            border-top: 1px solid rgba(255,255,255,0.03);
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .review-item {
+            background: rgba(255,255,255,0.02);
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 6px;
+            font-size:13px;
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.01);
+        }
+        .review-rating {
+            color: var(--rating);
+            font-weight: 700;
+            margin-right: 6px;
+        }
+
+        @media (max-width: 700px) {
+            header input { width: 70%; }
+            #movieList { padding: 12px; }
+            .movie-card { width: 100%; }
+            .modal-content { width: 96vw; padding: 14px; }
+            #modalMovieBanner { height: 160px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Movie Review Hub</h1>
+        <input type="text" id="searchBar" placeholder="Search movies...">
+    </header>
+
+    <main>
+        <div id="movieList"></div>
+    </main>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span id="closeBtn">&times;</span>
+            <h2 id="modalMovieTitle"></h2>
+            <img id="modalMovieBanner" src="" alt="Movie banner">
+            <form id="reviewForm">
+                <label for="rating">Rating:</label>
+                <select id="rating" required>
+                    <option value="">Select...</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+                <label for="reviewText">Review:</label>
+                <textarea id="reviewText" required placeholder="Write your review..."></textarea>
+                <button type="submit">Submit Review</button>
+            </form>
+            <div id="reviews"></div>
+        </div>
+    </div>
+
+    <script>
+        // Note: direct scraping from Google is not advisable. Using seeded public placeholder images instead.
+        const movies = [
+            { id: 1, title: "Dune: Part Two", banner: "https://picsum.photos/seed/dune/800/450", reviews: [], avgRating: 0 },
+            { id: 2, title: "The Marvels", banner: "https://picsum.photos/seed/marvels/800/450", reviews: [], avgRating: 0 },
+            { id: 3, title: "Killers of the Flower Moon", banner: "https://picsum.photos/seed/flowermoon/800/450", reviews: [], avgRating: 0 },
+            { id: 4, title: "Oppenheimer", banner: "https://picsum.photos/seed/oppenheimer/800/450", reviews: [], avgRating: 0 },
+            { id: 5, title: "John Wick: Chapter 4", banner: "https://picsum.photos/seed/johnwick/800/450", reviews: [], avgRating: 0 },
+            { id: 6, title: "Spider-Man: Across the Spider-Verse", banner: "https://picsum.photos/seed/spiderman/800/450", reviews: [], avgRating: 0 },
+            { id: 7, title: "Mission: Impossible - Dead Reckoning", banner: "https://picsum.photos/seed/mi/800/450", reviews: [], avgRating: 0 },
+            { id: 8, title: "The Batman", banner: "https://picsum.photos/seed/batman/800/450", reviews: [], avgRating: 0 },
+            { id: 9, title: "Guardians of the Galaxy Vol. 3", banner: "https://picsum.photos/seed/guardians/800/450", reviews: [], avgRating: 0 }
+        ];
+
+        // UI Elements
+        const movieList = document.getElementById('movieList');
+        const modal = document.getElementById('modal');
+        const closeBtn = document.getElementById('closeBtn');
+        const modalMovieTitle = document.getElementById('modalMovieTitle');
+        const modalMovieBanner = document.getElementById('modalMovieBanner');
+        const reviewForm = document.getElementById('reviewForm');
+        const ratingSelect = document.getElementById('rating');
+        const reviewText = document.getElementById('reviewText');
+        const reviewsDiv = document.getElementById('reviews');
+        const searchBar = document.getElementById('searchBar');
+
+        let currentMovieId = null;
+
+        function renderMovies(filteredMovies = movies) {
+            movieList.innerHTML = '';
+            filteredMovies.forEach((movie) => {
+                const card = document.createElement('div');
+                card.className = 'movie-card';
+                card.onclick = () => openModal(movie.id);
+                card.innerHTML = `
+                    <img src="${movie.banner}" alt="Banner" class="movie-banner">
+                    <div class="movie-body">
+                        <div class="movie-title">${movie.title}</div>
+                        <div class="movie-rating">Avg Rating: ${movie.avgRating ? movie.avgRating.toFixed(1) : "Not rated"}</div>
+                    </div>
+                `;
+                movieList.appendChild(card);
+            });
+        }
+
+        function openModal(movieId) {
+            currentMovieId = movieId;
+            const movie = movies.find(m => m.id === movieId);
+            modal.style.display = 'flex';
+            modalMovieTitle.textContent = movie.title;
+            modalMovieBanner.src = movie.banner;
+            renderReviews(movie);
+        }
+
+        closeBtn.onclick = () => {
+            modal.style.display = 'none';
+            reviewForm.reset();
+        };
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+                reviewForm.reset();
+            }
+        };
+
+        reviewForm.onsubmit = function(e) {
+            e.preventDefault();
+            const rating = parseInt(ratingSelect.value);
+            const review = reviewText.value.trim();
+            if (!rating || !review) return;
+
+            const movie = movies.find(m => m.id === currentMovieId);
+            movie.reviews.push({ rating, review });
+            movie.avgRating = movie.reviews.reduce((sum, r) => sum + r.rating, 0) / movie.reviews.length;
+
+            renderReviews(movie);
+            renderMovies();
+            reviewForm.reset();
+        };
+
+        function renderReviews(movie) {
+            reviewsDiv.innerHTML = movie.reviews.length === 0
+                ? '<p style="color:var(--muted);margin:0;font-size:13px;">No reviews yet. Be the first!</p>'
+                : movie.reviews.map(r =>
+                    `<div class="review-item"><span class="review-rating">★ ${r.rating}</span>${r.review}</div>`
+                ).join('');
+        }
+
+        // Search functionality
+        searchBar.oninput = function() {
+            const query = searchBar.value.toLowerCase();
+            const filtered = movies.filter(m =>
+                m.title.toLowerCase().includes(query)
+            );
+            renderMovies(filtered);
+        };
+
+        // Initial rendering
+        renderMovies();
+    </script>
+</body>
+</html>
