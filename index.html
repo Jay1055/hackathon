@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spend Sense — Dashboard</title>
+    <!-- Favicon and touch icon -->
+    <link rel="icon" href="xpensr-logo-mark.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="xpensr-logo-mark.svg">
+    <script>
+        // Early theme + auth check: apply saved theme (to <html>) and redirect to login if not authenticated.
+        (function() {
+            try {
+                // Apply theme early to avoid flash
+                var theme = localStorage.getItem('theme') || 'dark';
+                var themeClass = 'theme-' + (theme === 'light' ? 'light' : (theme === 'ocean' ? 'ocean' : 'dark'));
+                document.documentElement.classList.add(themeClass);
+
+                // Auth redirect
+                var logged = localStorage.getItem('isLoggedIn');
+                if (!logged || logged !== 'true') {
+                    if (!location.href.includes('login.html')) {
+                        location.replace('login.html');
+                    }
+                }
+            } catch (e) {
+                console.error('Init error:', e);
+            }
+        })();
+    </script>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js for charting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Load Lucide icons -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        /* Custom font and theme variables */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        :root {
+            /* default (light) */
+            --bg: #f3f4f6;
+            --fg: #111827;
+            --card-bg: #ffffff;
+            --muted: #6b7280;
+            --panel-border: rgba(0,0,0,0.04);
+            --accent: #4f46e5;
+        }
+        /* Dark theme variables */
+        .theme-dark {
+            --bg: #0b1220;
+            --fg: #e5e7eb;
+            --card-bg: #0f1724;
+            --muted: #94a3b8;
+            --panel-border: rgba(255,255,255,0.04);
+            --accent: #6366f1;
+        }
+        /* Ocean theme */
+        .theme-ocean {
+            --bg: #071728;
+            --fg: #e6f7ff;
+            --card-bg: #072433;
+            --muted: #9bd3e9;
+            --panel-border: rgba(255,255,255,0.04);
+            --accent: #06b6d4;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--fg);
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #9ca3af;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        /* Style for the responsive sidebar transition */
+        #sidebar {
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+            background-color: var(--card-bg);
+            color: var(--fg);
+            border-right: 1px solid var(--panel-border);
+            padding: 1rem;
+            width: 18rem; /* consistent width */
+            transition: transform 0.28s cubic-bezier(.2,.9,.2,1), box-shadow 0.2s;
+        }
+        .sidebar-item:hover {
+            background-color: rgba(99,102,241,0.06);
+            transform: translateX(4px);
+        }
+        .sidebar-item.active {
+            background-color: rgba(99,102,241,0.08);
+            border-left-color: var(--accent);
+        }
+        .card-shadow {
+            box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+            border: 1px solid var(--panel-border);
+            background-clip: padding-box;
+        }
+        /* Theme-specific overrides for utility classes (applied when theme class present on <html>) */
+        .theme-dark .bg-white,
+        .theme-ocean .bg-white {
+            background-color: var(--card-bg) !important; /* panel background */
+            color: var(--fg) !important;
+            border: 1px solid var(--panel-border) !important;
+        }
+        .theme-dark .text-gray-800,
+        .theme-dark .text-gray-900,
+        .theme-ocean .text-gray-800,
+        .theme-ocean .text-gray-900 {
+            color: var(--fg) !important;
+        }
+        .theme-dark .text-gray-700,
+        .theme-dark .text-gray-600,
+        .theme-ocean .text-gray-700,
+        .theme-ocean .text-gray-600 {
+            color: var(--muted) !important;
+        }
+        .theme-dark .text-gray-500,
+        .theme-ocean .text-gray-500 {
+            color: var(--muted) !important;
+        }
+        .theme-dark .border-gray-100,
+        .theme-ocean .border-gray-100 {
+            border-color: rgba(255,255,255,0.03) !important;
+        }
+        .theme-dark .bg-indigo-600 { background-color: #1f2937 !important; }
+        .theme-dark .bg-green-500 { background-color: #064e3b !important; }
+        .theme-dark .bg-red-500 { background-color: #7f1d1d !important; }
+        /* Message box variants */
+        .theme-dark .bg-green-500 { background-color: #0f766e !important; }
+        .theme-dark .bg-red-500 { background-color: #991b1b !important; }
+
+        /* Use accent variable where appropriate */
+        .accent { color: var(--accent); }
+
+        /* ---------- CHANGES START: improved theme-aware UI ----------- */
+
+        /* Make sidebar use theme variables instead of fixed gray */
+        #sidebar {
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+            background-color: var(--card-bg);
+            color: var(--fg);
+            border-right: 1px solid var(--panel-border);
+            padding: 1rem;
+            width: 18rem; /* consistent width */
+            transition: transform 0.28s cubic-bezier(.2,.9,.2,1), box-shadow 0.2s;
+        }
+
+        /* Sidebar title and profile contrast */
+        #sidebar h1 { color: var(--accent); }
+        #profile-initials { background: rgba(99,102,241,0.14); color: var(--accent); }
+
+        /* Sidebar items: neutral by default, accent on hover/active */
+        .sidebar-item {
+            background: transparent;
+            color: var(--fg);
+            border-left: 4px solid transparent;
+            transition: background 0.15s, border-color 0.15s, transform 0.12s;
+        }
+        .sidebar-item:hover {
+            background-color: rgba(99,102,241,0.06);
+            transform: translateX(4px);
+        }
+        .sidebar-item.active {
+            background-color: rgba(99,102,241,0.08);
+            border-left-color: var(--accent);
+        }
+
+        /* Use theme-aware card shadows and subtle borders */
+        .card-shadow {
+            box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+            border: 1px solid var(--panel-border);
+            background-clip: padding-box;
+        }
+
+        /* Slightly stronger contrast for .bg-white panels under themes */
+        .theme-dark .bg-white,
+        .theme-ocean .bg-white {
+            background-color: var(--card-bg) !important;
+            color: var(--fg) !important;
+            border: 1px solid var(--panel-border) !important;
+        }
+
+        /* Primary button utility to unify CTA appearance */
+        .btn-primary {
+            display:inline-flex;
+            align-items:center;
+            gap:0.5rem;
+            padding:0.6rem 0.9rem;
+            border-radius:0.6rem;
+            background: linear-gradient(90deg, var(--accent), rgba(99,102,241,0.86));
+            color: white;
+            font-weight:600;
+            box-shadow: 0 6px 18px rgba(99,102,241,0.08);
+            border: none;
+        }
+        .btn-primary:hover { transform: translateY(-2px); }
+
+        /* Make small action buttons consistent */
+        .action-small {
+            padding:0.45rem 0.7rem;
+            border-radius:0.5rem;
+            font-weight:600;
+        }
+
+        /* Message box: smoother entrance and shadow using theme */
+        #message-box {
+            transform: translateY(-6px);
+            opacity: 0;
+            transition: transform 200ms ease, opacity 200ms ease;
+        }
+        #message-box.show {
+            transform: translateY(0);
+            opacity: 1;
+            box-shadow: 0 10px 30px rgba(2,6,23,0.18);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+
+        /* Transaction list item improvements */
+        #recent-transactions-list .border {
+            border-color: rgba(0,0,0,0.04);
+        }
+        .transaction-desc { color: var(--fg); }
+        .transaction-meta { color: var(--muted); }
+
+        /* Improve responsive spacing for header */
+        #main-content > .w-full { padding-top: 0.4rem; padding-bottom: 0.6rem; }
+
+        /* Slightly larger hero balance text for emphasis */
+        #hero-balance-amount { font-size: 1.45rem; }
+
+        /* ---------- CHANGES END ----------- */
+
+    </style>
+</head>
+<body class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 w-64 flex flex-col space-y-6 overflow-y-auto" role="navigation" aria-label="Main sidebar">
+        
+    <!-- App Title -->
+    <h1 class="text-3xl font-bold mb-6">Spend <span style="color:var(--accent)">Sense</span></h1>
+
+        <!-- User Profile -->
+        <div class="flex items-center space-x-3 p-3 rounded-xl bg-gray-700">
+            <div id="profile-initials" class="h-10 w-10 rounded-full flex items-center justify-center text-xl font-semibold">DK</div>
+            <div>
+                <p id="profile-name" class="font-medium">Dhruv kayastha</p>
+                <p class="text-xs text-gray-400">View Profile</p>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="space-y-2 flex-grow">
+            <a href="#" class="sidebar-item active block p-3 rounded-lg flex items-center space-x-3" data-view="dashboard">
+                <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+                <span class="font-medium">Dashboard</span>
+            </a>
+            <a href="#" class="sidebar-item block p-3 rounded-lg flex items-center space-x-3" data-view="income">
+                <i data-lucide="trending-up" class="h-5 w-5"></i>
+                <span class="font-medium">Income</span>
+            </a>
+            <a href="#" class="sidebar-item block p-3 rounded-lg flex items-center space-x-3" data-view="expense">
+                <i data-lucide="trending-down" class="h-5 w-5"></i>
+                <span class="font-medium">Expense</span>
+            </a>
+        </nav>
+
+        <!-- Logout -->
+        <button id="logout-btn" class="mt-auto p-3 rounded-lg flex items-center space-x-3 bg-red-600 hover:bg-red-700 transition duration-150">
+            <i data-lucide="log-out" class="h-5 w-5"></i>
+            <span class="font-medium">Logout</span>
+        </button>
+
+        <button id="close-sidebar" class="lg:hidden absolute top-4 right-4 text-gray-300 hover:text-white" aria-label="Close menu">
+            <i data-lucide="x" class="h-6 w-6"></i>
+        </button>
+    </div>
+
+    <!-- Main Content Area -->
+    <div id="main-content" class="flex-grow p-4 sm:p-8 overflow-x-hidden">
+        
+        <!-- Header: app title, search, theme selector, user actions -->
+        <div class="w-full max-w-7xl mx-auto mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button id="open-sidebar" class="lg:hidden p-2 rounded-md bg-indigo-600 text-white">
+                        <i data-lucide="menu" class="h-6 w-6"></i>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-indigo-400">Spend <span class="text-white">Sense</span></h1>
+                        <p id="header-welcome" class="text-sm text-gray-400">Welcome back</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <div class="hidden sm:block">
+                        <input id="search-input" type="search" placeholder="Search transactions..." class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none" />
+                    </div>
+                    <label for="theme-select" class="sr-only">Theme</label>
+                    <select id="theme-select" class="p-2 rounded-lg bg-[rgba(255,255,255,0.03)] text-sm text-gray-200 border border-transparent">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="ocean">Ocean</option>
+                    </select>
+                    <button id="logout-top" class="hidden lg:inline-flex px-3 py-2 bg-red-600 text-white rounded-lg">Logout</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Content Views -->
+        <h2 id="view-title" class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-6 border-b-2 pb-2">Dashboard</h2>
+
+        <!-- Success/Error Message Box -->
+        <div id="message-box" class="hidden fixed top-4 right-4 p-4 rounded-xl text-white font-semibold z-50" aria-live="polite"></div>
+
+        <!-- Dashboard View -->
+        <section id="dashboard-view" class="view-section hidden">
+            <!-- Hero / Quick Actions -->
+            <div class="bg-white p-6 rounded-xl card-shadow mb-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Overview</p>
+                        <h2 class="text-2xl font-extrabold text-gray-900">Dashboard</h2>
+                        <p id="hero-balance" class="mt-2 text-lg text-gray-600">Balance: <span class="font-bold" id="hero-balance-amount">₹0.00</span></p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="showTransactionModal('income')" class="px-4 py-2 bg-green-600 text-white rounded-lg">Add Income</button>
+                        <button onclick="showTransactionModal('expense')" class="px-4 py-2 bg-red-600 text-white rounded-lg">Add Expense</button>
+                        <button onclick="showDownloadModal('all')" class="px-4 py-2 bg-gray-500 text-white rounded-lg">Export</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 gap-6 mb-6">
+                <div id="summary-cards" class="flex flex-col gap-4 w-full">
+                    <!-- Cards populated by JS -->
+                </div>
+            </div>
+
+            <!-- Income vs Expense Comparison (Last 6 months) -->
+            <div class="bg-white p-6 rounded-xl card-shadow mb-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Income vs Expense (Last 6 months)</h3>
+                <div class="h-64">
+                    <canvas id="comparison-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Transactions Table -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl card-shadow">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-gray-800">Recent Transactions</h3>
+                        <div class="flex items-center space-x-2">
+                            <select id="filter-type" class="p-2 rounded-lg border border-gray-200 bg-white text-sm hidden sm:block">
+                                <option value="all">All</option>
+                                <option value="income">Income</option>
+                                <option value="expense">Expense</option>
+                            </select>
+                            <button onclick="showTransactionModal('expense')" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm">New</button>
+                        </div>
+                    </div>
+
+                    <div id="recent-transactions-list" class="space-y-2 max-h-[40vh] overflow-y-auto">
+                        <!-- Transactions populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Right: Charts and Summary -->
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-white p-6 rounded-xl card-shadow">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">Financial Overview</h3>
+                        <div class="h-64 flex justify-center items-center">
+                            <canvas id="financial-pie-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <div class="bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Last 30 Days Expenses</h3>
+                    <div class="h-64">
+                        <canvas id="expenses-bar-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Last 60 Days Income</h3>
+                    <div class="h-64">
+                        <canvas id="income-line-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Income View -->
+        <section id="income-view" class="view-section hidden space-y-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center bg-white p-6 rounded-xl card-shadow">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 sm:mb-0">Income Overview</h3>
+                <div class="flex space-x-3">
+                    <button onclick="showDownloadModal('income')" class="px-4 py-2 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                        <i data-lucide="download" class="h-5 w-5 inline mr-2"></i>Download
+                    </button>
+                    <button onclick="showTransactionModal('income')" class="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
+                        <i data-lucide="plus" class="h-5 w-5 inline mr-2"></i>Add Income
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Income Chart -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Monthly Income Trend</h3>
+                    <div class="h-80">
+                        <canvas id="income-page-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Income List -->
+                <div class="lg:col-span-1 bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Income Sources</h3>
+                    <div id="income-list" class="space-y-4 max-h-[30rem] overflow-y-auto">
+                        <!-- Income items populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Expense View -->
+        <section id="expense-view" class="view-section hidden space-y-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center bg-white p-6 rounded-xl card-shadow">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 sm:mb-0">Expense Overview</h3>
+                <div class="flex space-x-3">
+                    <button onclick="showDownloadModal('expense')" class="px-4 py-2 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                        <i data-lucide="download" class="h-5 w-5 inline mr-2"></i>Download
+                    </button>
+                    <button onclick="showTransactionModal('expense')" class="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 shadow-md">
+                        <i data-lucide="plus" class="h-5 w-5 inline mr-2"></i>Add Expense
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Expense Chart -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Monthly Expense Trend</h3>
+                    <div class="h-80">
+                        <canvas id="expense-page-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Expense List -->
+                <div class="lg:col-span-1 bg-white p-6 rounded-xl card-shadow">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Expense Categories</h3>
+                    <div id="expense-list" class="space-y-4 max-h-[30rem] overflow-y-auto">
+                        <!-- Expense items populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- Transaction Modal -->
+        <div id="transaction-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl w-full max-w-md card-shadow transform transition-all">
+                <h3 id="modal-title" class="text-2xl font-bold mb-4 text-gray-800">Add New Transaction</h3>
+                <form id="transaction-form" onsubmit="handleFormSubmit(event)">
+                    <div class="mb-4">
+                        <label for="transaction-type" class="block text-sm font-medium text-gray-700">Type</label>
+                        <select id="transaction-type" name="type" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="transaction-description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <input type="text" id="transaction-description" name="description" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border" placeholder="e.g., Monthly Salary / Groceries">
+                    </div>
+                    <div class="mb-4">
+                        <label for="transaction-amount" class="block text-sm font-medium text-gray-700">Amount (₹)</label>
+                        <input type="number" step="0.01" id="transaction-amount" name="amount" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border" min="0.01">
+                    </div>
+                    <div class="mb-6">
+                        <label for="transaction-date" class="block text-sm font-medium text-gray-700">Date</label>
+                        <input type="date" id="transaction-date" name="date" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideTransactionModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition duration-150">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition duration-150">Save Transaction</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Download Confirmation Modal (Mock) -->
+        <div id="download-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl w-full max-w-sm card-shadow transform transition-all">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">Download Data</h3>
+                <p class="text-gray-600 mb-6">Are you sure you want to download all <span id="download-type-text" class="font-semibold"></span> data as an Excel file?</p>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="hideDownloadModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition duration-150">Cancel</button>
+                    <button type="button" onclick="confirmDownload()" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition duration-150">Yes, Download</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- Authentication check (redirect to login if not authenticated) ---
+        (function ensureAuth(){
+            try {
+                // If we're not on the login page and not logged in, redirect to login.html
+                if (!location.href.includes('login.html')) {
+                    const logged = localStorage.getItem('isLoggedIn');
+                    if (!logged || logged !== 'true') {
+                        // Redirect to login page
+                        location.href = 'login.html';
+                    }
+                }
+            } catch (e) {
+                // If any error occurs, allow the page to load (fail-open) but log to console
+                console.error('Auth check error:', e);
+            }
+        })();
+
+        // Logout function: clear auth and redirect to login
+        function logout() {
+            localStorage.removeItem('isLoggedIn');
+            localStorage.removeItem('username');
+            // Redirect to login page
+            location.href = 'login.html';
+        }
+
+        // Wire up logout button after DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const lb = document.getElementById('logout-btn');
+            if (lb) lb.addEventListener('click', logout);
+            // Top logout (if present)
+            const lbTop = document.getElementById('logout-top');
+            if (lbTop) lbTop.addEventListener('click', logout);
+
+            // Populate username in sidebar and header
+            try {
+                const name = localStorage.getItem('username') || '';
+                if (name) {
+                    const profile = document.getElementById('profile-name');
+                    if (profile) profile.textContent = name;
+                    const initialsEl = document.getElementById('profile-initials');
+                    if (initialsEl) {
+                        const parts = name.split(/\s+/).filter(Boolean);
+                        const initials = (parts[0]?.[0] || 'U') + ((parts[1]?.[0]) || '');
+                        initialsEl.textContent = initials.toUpperCase();
+                    }
+                    const headerWelcome = document.getElementById('header-welcome');
+                    if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + name.split(' ')[0];
+                }
+            } catch (e) { /* ignore */ }
+        });
+        // Use a simple UUID generator for transaction IDs
+        const generateId = () => crypto.randomUUID();
+
+        // --- Mock Data ---
+        let transactions = [
+            // Income
+            { id: generateId(), type: 'income', description: 'Monthly Salary', amount: 5500.00, date: '2024-10-01' },
+            { id: generateId(), type: 'income', description: 'Freelance Project A', amount: 1200.00, date: '2024-10-15' },
+            { id: generateId(), type: 'income', description: 'Stock Dividends', amount: 80.50, date: '2024-10-25' },
+            { id: generateId(), type: 'income', description: 'Gift from Mum', amount: 200.00, date: '2024-09-05' },
+            // Expenses
+            { id: generateId(), type: 'expense', description: 'Monthly Rent', amount: 1800.00, date: '2024-10-02' },
+            { id: generateId(), type: 'expense', description: 'Groceries', amount: 150.35, date: '2024-10-03' },
+            { id: generateId(), type: 'expense', description: 'Electricity Bill', amount: 95.75, date: '2024-10-08' },
+            { id: generateId(), type: 'expense', description: 'Dinner Out', amount: 65.00, date: '2024-10-16' },
+            { id: generateId(), type: 'expense', description: 'New Headphones', amount: 249.99, date: '2024-10-20' },
+            { id: generateId(), type: 'expense', description: 'Gym Membership', amount: 49.99, date: '2024-09-01' },
+        ];
+
+        let currentView = 'dashboard';
+        let charts = {};
+
+        // --- Helper Functions ---
+
+        /**
+         * Shows a toast notification message.
+         * @param {string} message The message to display.
+         * @param {string} type 'success' or 'error'
+         */
+        function showMessage(message, type = 'success') {
+            const msgBox = document.getElementById('message-box');
+            msgBox.textContent = message;
+
+            msgBox.classList.remove('hidden','show');
+            if (type === 'success') {
+                msgBox.style.background = 'linear-gradient(90deg,#10b981,#059669)';
+            } else if (type === 'error') {
+                msgBox.style.background = 'linear-gradient(90deg,#ef4444,#dc2626)';
+            }
+            // small delay to allow transition
+            requestAnimationFrame(() => msgBox.classList.add('show'));
+
+            setTimeout(() => {
+                msgBox.classList.remove('show');
+                setTimeout(()=> msgBox.classList.add('hidden'), 220);
+            }, 3000);
+        }
+
+
+        /**
+         * Formats a number as currency.
+         * @param {number} amount
+         * @returns {string}
+         */
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                minimumFractionDigits: 2
+            }).format(amount);
+        };
+
+        /**
+         * Calculates the financial summaries.
+         * @returns {{totalIncome: number, totalExpense: number, totalBalance: number}}
+         */
+        const calculateSummary = () => {
+            const totalIncome = transactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            const totalExpense = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            return {
+                totalIncome,
+                totalExpense,
+                totalBalance: totalIncome - totalExpense
+            };
+        };
+
+        // --- Rendering Functions ---
+
+        /**
+         * Renders the financial summary cards.
+         */
+        function renderSummaryCards() {
+            const { totalIncome, totalExpense, totalBalance } = calculateSummary();
+            const cardsContainer = document.getElementById('summary-cards');
+            cardsContainer.innerHTML = `
+                <!-- Total Balance Card -->
+                <div class="bg-indigo-600 text-white p-6 rounded-xl card-shadow w-full">
+                    <div class="flex items-center justify-between">
+                        <i data-lucide="wallet" class="h-8 w-8 text-indigo-200"></i>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-700">BALANCE</span>
+                    </div>
+                    <p class="text-3xl font-bold mt-2">${formatCurrency(totalBalance)}</p>
+                    <p class="text-sm text-indigo-200 mt-1">Total Available Funds</p>
+                </div>
+
+                <!-- Total Income Card -->
+                <div class="bg-green-500 text-white p-6 rounded-xl card-shadow w-full">
+                    <div class="flex items-center justify-between">
+                        <i data-lucide="arrow-up-circle" class="h-8 w-8 text-green-200"></i>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full bg-green-600">INCOME</span>
+                    </div>
+                    <p class="text-3xl font-bold mt-2">${formatCurrency(totalIncome)}</p>
+                    <p class="text-sm text-green-200 mt-1">Total Earnings</p>
+                </div>
+
+                <!-- Total Expense Card -->
+                <div class="bg-red-500 text-white p-6 rounded-xl card-shadow w-full">
+                    <div class="flex items-center justify-between">
+                        <i data-lucide="arrow-down-circle" class="h-8 w-8 text-red-200"></i>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full bg-red-600">EXPENSE</span>
+                    </div>
+                    <p class="text-3xl font-bold mt-2">${formatCurrency(totalExpense)}</p>
+                    <p class="text-sm text-red-200 mt-1">Total Spending</p>
+                </div>
+            `;
+            // Re-render Lucide icons for the new HTML content
+            lucide.createIcons();
+            // Update hero balance display if present
+            const heroAmount = document.getElementById('hero-balance-amount');
+            if (heroAmount) heroAmount.textContent = formatCurrency(totalBalance);
+        }
+
+        /**
+         * Renders a list of transactions (income/expense) in a card format.
+         * @param {string} containerId The ID of the HTML element to render into.
+         * @param {string} type 'income' or 'expense'
+         */
+        function renderTransactionList(containerId, type = null) {
+            const listContainer = document.getElementById(containerId);
+            // Allow optional search filtering via global searchQuery
+            const q = (window.__txSearchQuery || '').toLowerCase().trim();
+            const filteredTransactions = transactions
+                .filter(t => (type === null || t.type === type))
+                .filter(t => {
+                    if (!q) return true;
+                    const desc = (t.description || '').toLowerCase();
+                    const date = (t.date || '').toLowerCase();
+                    const amount = formatCurrency(t.amount).toLowerCase();
+                    return desc.includes(q) || date.includes(q) || amount.includes(q) || t.type.includes(q);
+                })
+                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date desc
+
+            if (containerId === 'recent-transactions-list') {
+                // For Dashboard, show only the top 50 (scrollable area)
+                // but if a search is active, show all matches
+                if (!q) filteredTransactions.splice(50);
+            }
+
+            listContainer.innerHTML = filteredTransactions.map(t => {
+                const isIncome = t.type === 'income';
+                const colorClass = isIncome ? 'text-green-600' : 'text-red-600';
+                const bgColorClass = isIncome ? 'bg-green-50' : 'bg-red-50';
+                const icon = isIncome ? 'arrow-up-right' : 'arrow-down-right';
+                const amountSign = isIncome ? '+' : '-';
+                const date = new Date(t.date).toLocaleDateString();
+
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-lg hover:shadow-lg transition duration-200 border border-gray-100">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(0,0,0,0.04)]">
+                                <i data-lucide="${icon}" class="h-5 w-5 ${colorClass}"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-800 transaction-desc">${t.description}</p>
+                                <p class="text-xs text-gray-500 transaction-meta">${date}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <p class="font-semibold ${colorClass}">${amountSign}${formatCurrency(t.amount)}</p>
+                            <button onclick="deleteTransaction('${t.id}')" class="text-gray-400 hover:text-red-500 transition duration-150 p-1 rounded-full" aria-label="Delete transaction">
+                                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('') || `<p class="text-center text-gray-500 p-8">No ${type || 'recent'} transactions found.</p>`;
+
+            lucide.createIcons();
+        }
+
+        /**
+         * Returns array of YYYY-MM-DD strings for last N days (including today) in ascending order.
+         */
+        function lastNDaysLabels(n) {
+        	const labels = [];
+        	const today = new Date();
+        	for (let i = n - 1; i >= 0; i--) {
+        		const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+        		labels.push(d.toISOString().slice(0, 10));
+        	}
+        	return labels;
+        }
+
+        /**
+         * Returns array of YYYY-MM strings for last N months (including current) in ascending order.
+         */
+        function lastNMonthsLabels(n) {
+        	const labels = [];
+        	const today = new Date();
+        	for (let i = n - 1; i >= 0; i--) {
+        		const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        		labels.push(d.toISOString().slice(0, 7));
+        	}
+        	return labels;
+        }
+
+        /**
+         * Returns array of YYYY-MM strings from Jan of the current year through current month.
+         */
+        function monthsFromYearStart() {
+            const res = [];
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth(); // 0-based
+            for (let m = 0; m <= month; m++) {
+                const mm = String(m + 1).padStart(2, '0');
+                res.push(`${year}-${mm}`);
+            }
+            return res;
+        }
+
+        function renderCharts(view) {
+        	// Destroy existing charts
+        	Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
+        	charts = {};
+
+        	const today = new Date();
+        	const last30 = lastNDaysLabels(30);
+        	const last60 = lastNDaysLabels(60);
+        	const last6 = lastNMonthsLabels(6);
+
+        	const bucket = (items, keyFn) => items.reduce((acc, t) => {
+        		const k = keyFn(t);
+        		acc[k] = (acc[k] || 0) + t.amount;
+        		return acc;
+        	}, {});
+
+        	const incomeByDay = bucket(transactions.filter(t => t.type === 'income'), t => t.date);
+        	const expenseByDay = bucket(transactions.filter(t => t.type === 'expense'), t => t.date);
+        	const incomeByMonth = bucket(transactions.filter(t => t.type === 'income'), t => t.date.slice(0,7));
+        	const expenseByMonth = bucket(transactions.filter(t => t.type === 'expense'), t => t.date.slice(0,7));
+
+        	const commonOptions = {
+        		responsive: true,
+        		maintainAspectRatio: false,
+        		animation: { duration: 900, easing: 'easeOutQuart' },
+        		interaction: { mode: 'nearest', intersect: true },
+        		plugins: {
+        			legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8 } },
+        			tooltip: { callbacks: { label: ctx => formatCurrency(Number((typeof ctx.raw === 'number') ? ctx.raw : (ctx.parsed ? ctx.parsed.y : 0))) } }
+        		},
+        		scales: { y: { ticks: { callback: v => formatCurrency(Number(v)) } } }
+        	};
+
+        	if (view === 'dashboard') {
+        		const summary = calculateSummary();
+
+        		// Comparison chart
+        		const compEl = document.getElementById('comparison-chart');
+        		if (compEl) {
+        			const labels = last6.map(m => {
+        				const [y, mm] = m.split('-'); return new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(new Date(y, mm-1, 1));
+        			});
+        			const inc = last6.map(m => incomeByMonth[m] || 0);
+        			const exp = last6.map(m => expenseByMonth[m] || 0);
+        			const ctx = compEl.getContext('2d');
+        			charts.comparison = new Chart(ctx, {
+        				type: 'bar',
+        				data: { labels, datasets: [{ label:'Income', data: inc, backgroundColor:'#10b981' }, { label:'Expense', data: exp, backgroundColor:'#ef4444' }] },
+        				options: { ...commonOptions, scales: { x:{}, y:{ beginAtZero:true } } }
+        			});
+        		}
+
+        		// Pie
+        		const pieEl = document.getElementById('financial-pie-chart');
+        		if (pieEl) {
+        			const ctx = pieEl.getContext('2d');
+        			charts.pie = new Chart(ctx, {
+        				type: 'pie',
+        				data: { labels:['Income','Expense'], datasets:[{ data:[summary.totalIncome, summary.totalExpense], backgroundColor:['#10b981','#ef4444'] }] },
+        				options: { ...commonOptions, plugins:{ legend:{ position:'bottom' } } }
+        			});
+        		}
+
+        		// Expenses last 30 days
+        		const expenseVals = last30.map(d => expenseByDay[d] || 0);
+        		const expEl = document.getElementById('expenses-bar-chart');
+        		if (expEl) {
+        			const ctx = expEl.getContext('2d');
+        			charts.expenses30 = new Chart(ctx, {
+        				type: 'bar',
+        				data: { labels: last30, datasets:[{ label:'Daily Expenses', data: expenseVals, backgroundColor:'#f87171' }] },
+        				options: { ...commonOptions, scales: { y:{ beginAtZero:true } } }
+        			});
+        		}
+
+        		// Income last 60 days
+        		const incomeVals = last60.map(d => incomeByDay[d] || 0);
+        		const incEl = document.getElementById('income-line-chart');
+        		if (incEl) {
+        			const ctx = incEl.getContext('2d');
+        			charts.income60 = new Chart(ctx, {
+        				type: 'line',
+        				data: { labels: last60, datasets:[{ label:'Daily Income', data: incomeVals, borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.18)', tension:0.3 }] },
+        				options: { ...commonOptions, scales: { y:{ beginAtZero:true } } }
+        			});
+        		}
+        	}
+
+        	// Income page monthly
+        	if (view === 'income') {
+        		const months = monthsFromYearStart();
+        		const labels = months.map(m => { const [y,mm]=m.split('-'); return new Intl.DateTimeFormat('en-IN',{month:'short',year:'numeric'}).format(new Date(y,mm-1,1)); });
+        		const values = months.map(m => incomeByMonth[m] || 0);
+        		const el = document.getElementById('income-page-chart');
+        		if (el) {
+        			const ctx = el.getContext('2d');
+        			charts.incomePage = new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:'Monthly Income', data:values, borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.12)', tension:0.4 }] }, options:{ ...commonOptions, scales:{ y:{ beginAtZero:true } } } });
+        		}
+        	}
+
+        	// Expense page monthly
+        	if (view === 'expense') {
+        		const months = monthsFromYearStart();
+        		const labels = months.map(m => { const [y,mm]=m.split('-'); return new Intl.DateTimeFormat('en-IN',{month:'short',year:'numeric'}).format(new Date(y,mm-1,1)); });
+        		const values = months.map(m => expenseByMonth[m] || 0);
+        		const el = document.getElementById('expense-page-chart');
+        		if (el) {
+        			const ctx = el.getContext('2d');
+        			charts.expensePage = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'Monthly Expense', data:values, backgroundColor:'#f87171' }] }, options:{ ...commonOptions, scales:{ y:{ beginAtZero:true } } } });
+        		}
+        	}
+        }
+
+        /**
+         * Switches the active view and triggers relevant re-renders.
+         * @param {string} view 'dashboard' | 'income' | 'expense'
+         */
+        function switchView(view) {
+            currentView = view;
+            // Update view title
+            const title = document.getElementById('view-title');
+            if (title) {
+                const label = view.charAt(0).toUpperCase() + view.slice(1);
+                title.textContent = label;
+            }
+
+            // Show/hide sections
+            document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
+            const section = document.getElementById(view + '-view');
+            if (section) section.classList.remove('hidden');
+
+            // Update active sidebar state
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.toggle('active', item.getAttribute('data-view') === view);
+            });
+
+            // Re-render summary and lists
+            try { renderSummaryCards(); } catch (e) { /* ignore */ }
+
+            if (view === 'dashboard') {
+                renderTransactionList('recent-transactions-list', null);
+            } else if (view === 'income') {
+                renderTransactionList('income-list', 'income');
+            } else if (view === 'expense') {
+                renderTransactionList('expense-list', 'expense');
+            }
+
+            // Render charts for the active view
+            try { renderCharts(view); } catch (e) { console.error('Chart render error', e); }
+        }
+
+        /**
+         * Deletes a transaction by ID.
+         * @param {string} id
+         */
+        function deleteTransaction(id) {
+            const initialLength = transactions.length;
+            transactions = transactions.filter(t => t.id !== id);
+
+            if (transactions.length < initialLength) {
+                showMessage('Transaction deleted successfully!');
+                // Re-render the current view to reflect the change
+                switchView(currentView);
+            } else {
+                showMessage('Error: Transaction not found.', 'error');
+            }
+        }
+
+        /**
+         * Handles the submission of the transaction form.
+         * @param {Event} event
+         */
+        function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const type = form.elements['type'].value;
+            const description = form.elements['description'].value;
+            const amount = parseFloat(form.elements['amount'].value);
+            const date = form.elements['date'].value;
+
+            if (isNaN(amount) || amount <= 0) {
+                showMessage('Please enter a valid amount.', 'error');
+                return;
+            }
+
+            const newTransaction = {
+                id: generateId(),
+                type: type,
+                description: description,
+                amount: amount,
+                date: date
+            };
+
+            transactions.push(newTransaction);
+            form.reset();
+            hideTransactionModal();
+            showMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully!`);
+
+            // Switch to the view of the newly added transaction's type
+            switchView(type);
+        }
+
+        // --- Modal Control ---
+
+        function showTransactionModal(type) {
+            const modal = document.getElementById('transaction-modal');
+            const select = document.getElementById('transaction-type');
+            const title = document.getElementById('modal-title');
+
+            // Set the type in the select box and modal title
+            select.value = type;
+            title.textContent = `Add New ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+
+            // Set today's date as default
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('transaction-date').value = today;
+
+            modal.classList.remove('hidden');
+        }
+
+        function hideTransactionModal() {
+            document.getElementById('transaction-modal').classList.add('hidden');
+            document.getElementById('transaction-form').reset();
+        }
+
+        let downloadType = '';
+        function showDownloadModal(type) {
+            downloadType = type;
+            document.getElementById('download-type-text').textContent = type.charAt(0).toUpperCase() + type.slice(1);
+            document.getElementById('download-modal').classList.remove('hidden');
+        }
+
+        function hideDownloadModal() {
+            document.getElementById('download-modal').classList.add('hidden');
+            downloadType = '';
+        }
+
+        function confirmDownload() {
+            hideDownloadModal();
+            showMessage(`Downloading all ${downloadType} data to Excel (Mock action)...`);
+    
+        }
+
+        // --- Event Listeners and Initialization ---
+
+        // Sidebar Toggles
+        document.getElementById('open-sidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.remove('-translate-x-full');
+        });
+        document.getElementById('close-sidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.add('-translate-x-full');
+        });
+
+        // Navigation Clicks
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = item.getAttribute('data-view');
+                if (view) {
+                    switchView(view);
+                }
+            });
+        });
+
+        // Initial load
+        window.onload = function() {
+            // Start on the Dashboard view
+            switchView('dashboard');
+        };
+
+        // For better Chart.js responsiveness on window resize
+        window.addEventListener('resize', () => {
+            Object.values(charts).forEach(chart => chart.resize());
+        });
+
+        // Theme handling: react to selector, persist choice, and apply theme class on <html>
+        (function themeSetup(){
+            const select = document.getElementById('theme-select');
+            if (!select) return;
+
+            function applyTheme(name){
+                const root = document.documentElement;
+                root.classList.remove('theme-light','theme-dark','theme-ocean');
+                const cls = 'theme-' + (name === 'light' ? 'light' : (name === 'ocean' ? 'ocean' : 'dark'));
+                root.classList.add(cls);
+                localStorage.setItem('theme', name);
+            }
+
+            // Initialize selector based on saved theme
+            const saved = localStorage.getItem('theme') || 'dark';
+            select.value = saved;
+            applyTheme(saved);
+
+            select.addEventListener('change', (e) => {
+                applyTheme(e.target.value);
+            });
+        })();
+
+        // --- Search / filter handling ---
+        (function searchSetup(){
+            const input = document.getElementById('search-input');
+            const filterType = document.getElementById('filter-type');
+            let timeout = null;
+
+            function doSearch() {
+                window.__txSearchQuery = input ? input.value : '';
+                // re-render current lists depending on view
+                if (currentView === 'dashboard') {
+                    renderTransactionList('recent-transactions-list', null);
+                } else if (currentView === 'income') {
+                    renderTransactionList('income-list', 'income');
+                } else if (currentView === 'expense') {
+                    renderTransactionList('expense-list', 'expense');
+                }
+            }
+
+            if (input) {
+                input.addEventListener('input', function(){
+                    clearTimeout(timeout);
+                    timeout = setTimeout(doSearch, 250);
+                });
+            }
+
+            if (filterType) {
+                filterType.addEventListener('change', function(e){
+                    const v = e.target.value;
+                    if (v === 'all') {
+                        switchView('dashboard');
+                    } else {
+                        switchView(v);
+                    }
+                });
+            }
+        })();
+    </script>
+
+</body>
+</html>
